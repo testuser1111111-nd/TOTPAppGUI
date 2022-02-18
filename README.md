@@ -1,3 +1,3 @@
 # TOTP generator GUI
 
-made with dotnet 6
+read title
