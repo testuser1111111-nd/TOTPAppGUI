@@ -6,6 +6,7 @@ using System.Linq;
 
 namespace LibraryForTOTP
 {
+    //this is a copy of my another repo
     public static class RFC6238andRFC4226
     {
         public static int GenTOTP(byte[] S, int adjust = 0, int span = 30)
