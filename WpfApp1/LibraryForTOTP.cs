@@ -3,10 +3,8 @@ using System.Security.Cryptography;
 using System.Collections.Generic;
 using System.Text;
 using System.Linq;
-
 namespace LibraryForTOTP
 {
-    //this is a copy of my another repo
     public static class RFC6238andRFC4226
     {
         public static int GenTOTP(byte[] S, int adjust = 0, int span = 30)
@@ -38,31 +36,25 @@ namespace LibraryForTOTP
     }
     public static class RFC4648Base32
     {
-        const string tablestring = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-        private static char[] table = tablestring.ToCharArray();
-        public static int CharToInt(char c) => Array.IndexOf(table, Char.ToUpper(c));
-        public static byte[] FromBase32String(string base32text, char padding = '=')
+        //tuned up 20220312 by dekabutsu(testuser1111111-nd)
+        private static readonly char[] table = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".ToCharArray();
+        public static byte[] FromBase32String(string base32string, char padding = '=') => FromBase32CharArray(base32string.ToCharArray(), padding);
+        public static string ToBase32String(in byte[] data, char padding = '=') => new(ToBase32CharArray(data, padding));
+
+        public static byte[] FromBase32CharArray(in char[] base32textinput, char padding = '=')
         {
-            if (base32text == null || base32text.Length == 0)
+            if (base32textinput == null || base32textinput.Length == 0)
             {
                 return Array.Empty<byte>();
             }
-            base32text = base32text.Trim().TrimEnd(padding);
-            long len = base32text.Length;
-            const int cutlength = 8;
-            long len2 = len % cutlength == 0 ? len / cutlength : (len / cutlength) + 1;
-            string[] splitedtext = new string[len2];
-            for (int i = 0; i < splitedtext.Length; i++)
+            int length = 0;
+            for (int i = base32textinput.Length - 1; i >= 0; i--)
             {
-                for (int j = i * 8; j < (base32text.Length > (i + 1) * 8 ? (i + 1) * 8 : base32text.Length); j++)
-                {
-                    splitedtext[i] += base32text[j];
-                }
+                if (base32textinput[i] != padding) { length = i; break; }
             }
-            LinkedList<byte> decoded = new LinkedList<byte>();
+            int len2 = (length + 1) % 8 == 0 ? (length + 1) / 8 : ((length + 1) / 8) + 1;
             int len3 = 0;
-            int len4 = splitedtext[splitedtext.Length - 1].Length;
-
+            int len4 = length + 1 - (len2 - 1) * 8;
             switch (len4)
             {
                 case 1: throw new FormatException("Base32 length not appropriate");
@@ -74,40 +66,71 @@ namespace LibraryForTOTP
                 case 7: len3 = 4; break;
                 case 8: len3 = 5; break;
             }
-            for (int i = 0; i < splitedtext.Length; i++)
+            byte[] decoded = new byte[len2 * 5 - 5 + len3];
+            int index = 0;
+            for (int i = 0; i < len2 - 1; i++)
             {
                 ulong piece = 0;
-                for (int j = 0; j < cutlength; j++)
+                for (int j = 0; j < 8; j++)
                 {
-                    piece <<= 5;
-                    if (j < splitedtext[i].Length)
+                    uint temp = base32textinput[i * 8 + j];
+                    //unicodeを数値として扱っている
+                    if (temp >= 65 && temp <= 90)
                     {
-                        if (CharToInt(splitedtext[i][j]) < 0)
-                        {
-                            throw new FormatException("Letter not appropriate");
-                        }
-                        else
-                        {
-                            piece |= (uint)CharToInt(splitedtext[i][j]);
-                        }
+                        piece |= (ulong)(temp - 65) << 5 * (7 - j);
                     }
+                    else if (temp >= 50 && temp <= 55)
+                    {
+
+                        piece |= (ulong)(temp - 24) << 5 * (7 - j);
+                    }
+                    else
+                    {
+                        throw new FormatException("Letter not appropriate");
+                    }
+
                 }
-                for (int j = 0; j < 5; j++)
+                for (int j = 32; j >= 0; j -= 8)
                 {
-                    ulong aaa = (piece >> (4 - j) * 8) & 255;
-                    if (i != splitedtext.Length - 1 | j < len3)
-                    {
-                        decoded.AddLast((byte)aaa);
-                    }
+                    decoded[index++] = (byte)(piece >> j);
                 }
             }
-            return decoded.ToArray();
+            {
+                ulong piece2 = 0;
+                for (int j = 0; j < length + 1 - ((len2 - 1) * 8); j++)
+                {
+                    //unicodeを数値として扱っている
+                    if (base32textinput[(len2 - 1) * 8 + j] >= 65 && base32textinput[(len2 - 1) * 8 + j] <= 90)
+                    {
+                        piece2 |= (ulong)(base32textinput[(len2 - 1) * 8 + j] - 65) << 5 * (7 - j);
+                    }
+                    else if (base32textinput[(len2 - 1) * 8 + j] >= 50 && base32textinput[(len2 - 1) * 8 + j] <= 55)
+                    {
+
+                        piece2 |= (ulong)(base32textinput[(len2 - 1) * 8 + j] - 24) << 5 * (7 - j);
+                    }
+                    else
+                    {
+                        throw new FormatException("Letter not appropriate");
+                    }
+
+                }
+                for (int j = 0; j < len3; j++)
+                {
+                    decoded[index++] = (byte)(piece2 >> (4 - j) * 8);
+                }
+            }
+            return decoded;
         }
-        public static string ToBase32String(byte[] data, char padding = '=')
+        public static char[] ToBase32CharArray(in byte[] data, char padding = '=')
         {
-            const uint mask = 31;
             int divideinto = data.Length % 5 == 0 ? data.Length / 5 : data.Length / 5 + 1;
-            StringBuilder encoded = new StringBuilder(divideinto * 8);
+            if ((long)divideinto * 8 > ((long)1 << 31 - 1))
+            {
+                throw new ArgumentException("data length too long");
+            }
+            char[] encoded = new char[divideinto * 8];
+            int index = 0;
             int finallength = 8;
             switch (data.Length % 5)
             {
@@ -130,17 +153,17 @@ namespace LibraryForTOTP
                 }
                 for (int j = 0; j < 8; j++)
                 {
-                    if (i < divideinto - 1 | (i == divideinto - 1 && j < finallength))
+                    if (i != divideinto - 1 || j < finallength)
                     {
-                        encoded.Append(table[(int)((temp >> 5 * (7 - j)) & mask)]);
+                        encoded[index++] = table[(int)((temp >> 5 * (7 - j)) & 31)];
                     }
                     else
                     {
-                        encoded.Append(padding);
+                        encoded[index++] = padding;
                     }
                 }
             }
-            return encoded.ToString();
+            return encoded;
         }
     }
 }

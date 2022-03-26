@@ -172,7 +172,7 @@ namespace WpfApp1
         private void Open_License_Page(object sender,RoutedEventArgs e)
         {
             ProcessStartInfo processStartInfo = new ProcessStartInfo() {
-                FileName = "https://www.npca.jp/about/agreements",
+                FileName = "https://github.com/testuser1111111-nd/TOTPAppGUI/blob/master/LICENSE",
                 UseShellExecute = true
             };
 
