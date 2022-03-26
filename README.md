@@ -1,1 +1,3 @@
-# WpfApp1
+# TOTP generator GUI
+
+read title
